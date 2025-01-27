@@ -1,7 +1,4 @@
 local ESX = exports["es_extended"]:getSharedObject()
-local spawnedProps = {}
-local maxProps = 25
-local spawnedStones = 0
 
 -- Function Notif
 local function ShowNotification(message, type)
