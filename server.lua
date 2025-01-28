@@ -11,84 +11,77 @@ end
 
 -- Mining Event
 RegisterNetEvent('pq-job:nambangbatu', function()
-    local source = source
-    local stoneQuantity = math.random(Config.Mining.minQuantity, Config.Mining.maxQuantity)
+    local player = source
+    local config = Config.Mining
     
-    if exports.ox_inventory:CanCarryItem(source, Config.Mining.itemToAdd, stoneQuantity) then
-        exports.ox_inventory:AddItem(source, Config.Mining.itemToAdd, stoneQuantity)
-        NotifyPlayer(source, 'Kamu mendapatkan ' .. stoneQuantity .. ' batu')
+    local item = exports.ox_inventory:GetItem(player, config.requiredItem)
+    if not item or item.count <= 0 then
+        NotifyPlayer(player, 'Kamu butuh Pickaxe buat nambang!', 'error')
+        return
+    end
+    
+    local stoneQuantity = math.random(config.minQuantity, config.maxQuantity)
+    
+    if exports.ox_inventory:CanCarryItem(player, config.itemToAdd, stoneQuantity) then
+        exports.ox_inventory:AddItem(player, config.itemToAdd, stoneQuantity)
+        NotifyPlayer(player, 'Kamu mendapatkan ' .. stoneQuantity .. ' batu', 'success')
     else
-        NotifyPlayer(source, 'KANTONG MU PENUH!')
+        NotifyPlayer(player, 'KANTONG MU PENUH!', 'error')
     end
 end)
+
 
 -- Stone Washing Event
 RegisterNetEvent('pq-job:cucibatu', function()
     local source = source
-    if exports.ox_inventory:CanCarryItem(source, Config.Washing.outputItem, Config.Washing.requiredQuantity) then
-        exports.ox_inventory:RemoveItem(source, Config.Washing.inputItem, Config.Washing.requiredQuantity)
-        exports.ox_inventory:AddItem(source, Config.Washing.outputItem, Config.Washing.requiredQuantity)
+    if exports.ox_inventory:GetItem(source, Config.Washing.inputItem)?.count >= Config.Washing.requiredQuantity then
+        if exports.ox_inventory:CanCarryItem(source, Config.Washing.outputItem, Config.Washing.requiredQuantity) then
+            exports.ox_inventory:RemoveItem(source, Config.Washing.inputItem, Config.Washing.requiredQuantity)
+            exports.ox_inventory:AddItem(source, Config.Washing.outputItem, Config.Washing.requiredQuantity)
+        else
+            NotifyPlayer(source, 'KANTONG MU PENUH!')
+        end
     else
-        NotifyPlayer(source, 'KANTONG MU PENUH!')
+        NotifyPlayer(source, 'BATU KAMU KURANG!')
     end
 end)
 
+
 -- Smelting Event
 RegisterNetEvent('pq-job:leburbatu', function()
-    local source = source
+    local player = source
+    local config = Config.Smelting
     
-    if not exports.ox_inventory:RemoveItem(source, Config.Smelting.inputItem, Config.Smelting.requiredStones) then
-        NotifyPlayer(source, 'Kamu tidak memiliki cukup batu cuci!', 'error')
+    if not exports.ox_inventory:RemoveItem(player, config.inputItem, config.requiredStones) then
+        NotifyPlayer(player, 'Kamu tidak memiliki cukup batu cuci!', 'error')
         return
     end
     
-    local minerals = {
-        {
-            item = 'copper',
-            chance = Config.Smelting.chances.copper,
-            min = Config.Smelting.quantities.copper.min,
-            max = Config.Smelting.quantities.copper.max
-        },
-        {
-            item = 'iron',
-            chance = Config.Smelting.chances.iron,
-            min = Config.Smelting.quantities.iron.min,
-            max = Config.Smelting.quantities.iron.max
-        },
-        {
-            item = 'gold',
-            chance = Config.Smelting.chances.gold,
-            min = Config.Smelting.quantities.gold.min,
-            max = Config.Smelting.quantities.gold.max
-        },
-        {
-            item = 'diamond',
-            chance = Config.Smelting.chances.diamond,
-            min = Config.Smelting.quantities.diamond.min,
-            max = Config.Smelting.quantities.diamond.max
-        }
-    }
-    
+    local mineralTypes = {'copper', 'iron', 'gold', 'diamond'}
     local itemsReceived = {}
     
-    for _, mineral in ipairs(minerals) do
-        if math.random() <= mineral.chance then
-            local quantity = math.random(mineral.min, mineral.max)
-            if quantity > 0 then
-                if exports.ox_inventory:CanCarryItem(source, mineral.item, quantity) then
-                    exports.ox_inventory:AddItem(source, mineral.item, quantity)
-                    table.insert(itemsReceived, quantity .. 'x ' .. mineral.item)
-                else
-                    NotifyPlayer(source, 'KANTONG MU PENUH!', 'error')
+    for _, mineralType in ipairs(mineralTypes) do
+        local chance = config.chances[mineralType]
+        local quantity = config.quantities[mineralType]
+        
+        if math.random() <= chance then
+            local amount = math.random(quantity.min, quantity.max)
+            
+            if amount > 0 then
+                if not exports.ox_inventory:CanCarryItem(player, mineralType, amount) then
+                    NotifyPlayer(player, 'KANTONG MU PENUH!', 'error')
                     return
                 end
+                
+                exports.ox_inventory:AddItem(player, mineralType, amount)
+                table.insert(itemsReceived, amount .. 'x ' .. mineralType)
             end
         end
     end
     
     if #itemsReceived > 0 then
-        NotifyPlayer(source, 'Kamu mendapatkan: ' .. table.concat(itemsReceived, ', '), 'success')
+        NotifyPlayer(player, 'Kamu mendapatkan: ' .. table.concat(itemsReceived, ', '), 'success')
     else
-        NotifyPlayer(source, 'Kamu tidak mendapatkan apa-apa dari peleburan', 'info')
+        NotifyPlayer(player, 'Kamu tidak mendapatkan apa-apa dari peleburan', 'info')
     end
 end)
