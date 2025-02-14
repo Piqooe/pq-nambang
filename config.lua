@@ -11,7 +11,7 @@ Config = {
             rareStoneItem = 'rare_stone', -- Janlup di tambahin di items.lua
             
             -- Rockslide
-            rockslideChance = 0.9, -- 5% chance (ganti sesuai kebutuhan)
+            rockslideChance = 0.05, -- 5% chance (ganti sesuai kebutuhan)
             rockslideDamage = 25, -- Damage ke player
             
             -- Bonus Loot
