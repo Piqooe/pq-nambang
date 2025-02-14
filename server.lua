@@ -9,22 +9,86 @@ local function NotifyPlayer(source, message, type)
     })
 end
 
+-- Random Events Handler
+local function HandleRandomEvents(player)
+    local eventChance = math.random()
+    
+    if eventChance <= Config.Mining.Events.rareStonechance then
+        if exports.ox_inventory:CanCarryItem(player, Config.Mining.Events.rareStoneItem, 1) then
+            exports.ox_inventory:AddItem(player, Config.Mining.Events.rareStoneItem, 1)
+            NotifyPlayer(player, 'Kamu menemukan batu langka!', 'success')
+        end
+    elseif eventChance <= Config.Mining.Events.rockslideChance then
+        TriggerClientEvent('pq-job:rockslideEffect', player, Config.Mining.Events.rockslideDamage)
+        NotifyPlayer(player, 'Batu runtuh! Kamu terluka dan butuh pertolongan medis!', 'error')
+    elseif eventChance <= Config.Mining.Events.bonusLootChance then
+        local bonusAmount = math.random(Config.Mining.Events.bonusMin, Config.Mining.Events.bonusMax)
+        if exports.ox_inventory:CanCarryItem(player, Config.Mining.itemToAdd, bonusAmount) then
+            exports.ox_inventory:AddItem(player, Config.Mining.itemToAdd, bonusAmount)
+            NotifyPlayer(player, 'Beruntung! Kamu mendapat ' .. bonusAmount .. ' batu tambahan!', 'success')
+        end
+    end
+end
+
+-- Crafting Event
+RegisterNetEvent('pq-job:craftPickaxe', function(pickaxeType)
+    local source = source
+    local pickaxeData = Config.Mining.Pickaxes[pickaxeType]
+    
+    if not pickaxeData or not pickaxeData.craftingMaterials then
+        return
+    end
+    
+    for material, amount in pairs(pickaxeData.craftingMaterials) do
+        if exports.ox_inventory:GetItemCount(source, material) < amount then
+            NotifyPlayer(source, 'Bahan tidak cukup!', 'error')
+            return
+        end
+    end
+    
+    for material, amount in pairs(pickaxeData.craftingMaterials) do
+        exports.ox_inventory:RemoveItem(source, material, amount)
+    end
+    
+    if exports.ox_inventory:CanCarryItem(source, pickaxeType, 1) then
+        exports.ox_inventory:AddItem(source, pickaxeType, 1)
+        NotifyPlayer(source, 'Berhasil membuat ' .. pickaxeData.label, 'success')
+    else
+        NotifyPlayer(source, 'Inventory penuh!', 'error')
+        for material, amount in pairs(pickaxeData.craftingMaterials) do
+            exports.ox_inventory:AddItem(source, material, amount)
+        end
+    end
+end)
+
 -- Mining Event
-RegisterNetEvent('pq-job:nambangbatu', function()
+RegisterNetEvent('pq-job:nambangbatu', function(pickaxeType)
     local player = source
     local config = Config.Mining
+    local pickaxe = config.Pickaxes[pickaxeType]
     
-    local item = exports.ox_inventory:GetItem(player, config.requiredItem)
+    if not pickaxe then
+        NotifyPlayer(player, 'Pickaxe tidak valid!', 'error')
+        return
+    end
+    
+    local item = exports.ox_inventory:GetItem(player, pickaxeType)
     if not item or item.count <= 0 then
-        NotifyPlayer(player, 'Kamu butuh Pickaxe buat nambang!', 'error')
+        NotifyPlayer(player, 'Kamu butuh ' .. pickaxe.label .. ' buat nambang!', 'error')
         return
     end
     
     local stoneQuantity = math.random(config.minQuantity, config.maxQuantity)
     
+    if math.random() <= pickaxe.bonusChance then
+        stoneQuantity = stoneQuantity + math.random(1, 3)
+    end
+    
     if exports.ox_inventory:CanCarryItem(player, config.itemToAdd, stoneQuantity) then
         exports.ox_inventory:AddItem(player, config.itemToAdd, stoneQuantity)
         NotifyPlayer(player, 'Kamu mendapatkan ' .. stoneQuantity .. ' batu', 'success')
+        
+        HandleRandomEvents(player)
     else
         NotifyPlayer(player, 'KANTONG MU PENUH!', 'error')
     end

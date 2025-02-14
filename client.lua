@@ -27,6 +27,89 @@ local function StartMiningGame(difficulty, successCallback)
     end)
 end
 
+-- Function GetMiningDuration
+local function GetMiningDuration(pickaxeType)
+    local baseTime = 10000
+    local pickaxe = Config.Mining.Pickaxes[pickaxeType]
+    if pickaxe then
+        return baseTime * pickaxe.miningSpeed
+    end
+    return baseTime
+end
+
+-- Function OpenBlacksmithMenu
+local function OpenBlacksmithMenu()
+    local options = {}
+    
+    for pickaxeType, data in pairs(Config.Mining.Pickaxes) do
+        if data.craftingMaterials then
+            local option = {
+                title = 'Craft ' .. data.label,
+                description = 'Buat ' .. data.label,
+                onSelect = function()
+                    local hasMaterials = true
+                    local materialsText = ''
+                    
+                    for material, amount in pairs(data.craftingMaterials) do
+                        local count = exports.ox_inventory:GetItemCount(material)
+                        if count < amount then
+                            hasMaterials = false
+                        end
+                        materialsText = materialsText .. material .. ': ' .. amount .. '\n'
+                    end
+                    
+                    if hasMaterials then
+                        if lib.progressBar({
+                            duration = 5000,
+                            label = 'Membuat ' .. data.label,
+                            useWhileDead = false,
+                            canCancel = true,
+                            disable = {
+                                move = true,
+                                car = true,
+                                combat = true
+                            },
+                            anim = {
+                                dict = 'mini@repair',
+                                clip = 'fixing_a_ped'
+                            },
+                        }) then
+                            TriggerServerEvent('pq-job:craftPickaxe', pickaxeType)
+                        end
+                    else
+                        ShowNotification('Bahan tidak cukup!\nDibutuhkan:\n' .. materialsText, 'error')
+                    end
+                end
+            }
+            table.insert(options, option)
+        end
+    end
+    
+    lib.registerContext({
+        id = 'blacksmith_menu',
+        title = 'Tukang Besi',
+        options = options
+    })
+    
+    lib.showContext('blacksmith_menu')
+end
+
+-- Create Blacksmith Zone
+CreateThread(function()
+    exports.ox_target:addSphereZone({
+        coords = Config.Mining.Blacksmith.location,
+        radius = Config.Mining.Blacksmith.radius,
+        options = {{
+            label = Config.Mining.Blacksmith.label,
+            icon = Config.Mining.Blacksmith.icon,
+            distance = Config.Mining.Blacksmith.distance,
+            onSelect = function()
+                OpenBlacksmithMenu()
+            end
+        }}
+    })
+end)
+
 -- Mining Zone
 local function createMiningZone(zone)
     exports.ox_target:addSphereZone({
@@ -37,12 +120,19 @@ local function createMiningZone(zone)
             name = 'menambangbatu',
             icon = Config.Mining.icon,
             distance = Config.Mining.distance,
-            items = Config.Mining.requiredItem,
+            -- items = {'pickaxe', 'iron_pickaxe', 'gold_pickaxe', 'diamond_pickaxe'},
             onSelect = function()
+                local bestPickaxe = 'pickaxe'
+                for pickaxeType, _ in pairs(Config.Mining.Pickaxes) do
+                    if exports.ox_inventory:GetItemCount(pickaxeType) > 0 then
+                        bestPickaxe = pickaxeType
+                    end
+                end
+                
                 ExecuteCommand('e mechanic')           
                 StartMiningGame(Config.Mining.miningDifficulty, function()
                     if lib.progressBar({
-                        duration = 10000,
+                        duration = GetMiningDuration(bestPickaxe),
                         label = 'Menambang Batu',
                         useWhileDead = false,
                         canCancel = true,
@@ -52,12 +142,13 @@ local function createMiningZone(zone)
                             clip = 'base',
                         },
                         prop = {
-                            bone = 57005, model = 'prop_tool_pickaxe', 
+                            bone = 57005, 
+                            model = 'prop_tool_pickaxe', 
                             pos = vec3(0.09, -0.53, -0.22), 
                             rot = vec3(252.0, 180.0, 0.0)
                         },
                     }) then
-                        TriggerServerEvent('pq-job:nambangbatu')
+                        TriggerServerEvent('pq-job:nambangbatu', bestPickaxe)
                     else
                         ShowNotification('Penambangan dibatalkan', 'error')
                     end
@@ -149,6 +240,28 @@ local function createSmeltingZone(zone)
         end
     })
 end
+
+-- RockSlide Event
+RegisterNetEvent('pq-job:rockslideEffect')
+AddEventHandler('pq-job:rockslideEffect', function(damage)
+    local ped = PlayerPedId()
+    local health = GetEntityHealth(ped)
+    
+    SetPedToRagdoll(ped, 2000, 2000, 0, true, true, false)
+    
+    ShakeGameplayCam('SMALL_EXPLOSION_SHAKE', 0.8)
+    
+    local coords = GetEntityCoords(ped)
+    UseParticleFxAssetNextCall('core')
+    StartParticleFxNonLoopedAtCoord('ent_sht_rockdust', coords.x, coords.y, coords.z, 0.0, 0.0, 0.0, 2.0, false, false, false)
+    
+    Wait(1000)
+    SetEntityHealth(ped, health - damage)
+    
+    StartScreenEffect("DeathFailOut", 0, false)
+    Wait(1500)
+    StopScreenEffect("DeathFailOut")
+end)
 
 CreateThread(function()
     for _, zone in ipairs(Config.Mining.zones) do
